@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"github.com/hashicorp/nomad/client/config"
 	"github.com/hashicorp/nomad/client/driver"
 	"github.com/hashicorp/nomad/client/fingerprint"
+	"github.com/hashicorp/nomad/client/servers"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/vaultclient"
 	"github.com/hashicorp/nomad/command/agent/consul"
@@ -109,8 +111,8 @@ type Client struct {
 
 	connPool *nomad.ConnPool
 
-	// servers is the (optionally prioritized) list of nomad servers
-	servers *serverlist
+	// servers is the list of nomad servers
+	servers *servers.Manager
 
 	// heartbeat related times for tracking how often to heartbeat
 	lastHeartbeat   time.Time
@@ -192,10 +194,12 @@ func NewClient(cfg *config.Config, consulCatalog consul.CatalogAPI, consulServic
 		allocs:              make(map[string]*AllocRunner),
 		allocUpdates:        make(chan *structs.Allocation, 64),
 		shutdownCh:          make(chan struct{}),
-		servers:             newServerList(),
 		triggerDiscoveryCh:  make(chan struct{}),
 		serversDiscoveredCh: make(chan struct{}),
 	}
+
+	// Initialize the server manager
+	c.servers = servers.New(c.logger, c.shutdownCh, c)
 
 	// Initialize the client
 	if err := c.init(); err != nil {
@@ -259,7 +263,7 @@ func NewClient(cfg *config.Config, consulCatalog consul.CatalogAPI, consulServic
 	// Setup Consul discovery if enabled
 	if c.configCopy.ConsulConfig.ClientAutoJoin != nil && *c.configCopy.ConsulConfig.ClientAutoJoin {
 		go c.consulDiscovery()
-		if len(c.servers.all()) == 0 {
+		if c.servers.NumServers() == 0 {
 			// No configured servers; trigger discovery manually
 			c.triggerDiscoveryCh <- struct{}{}
 		}
@@ -453,26 +457,62 @@ func (c *Client) RPC(method string, args interface{}, reply interface{}) error {
 		return c.config.RPCHandler.RPC(method, args, reply)
 	}
 
-	servers := c.servers.all()
-	if len(servers) == 0 {
+	// This is subtle but we start measuring the time on the client side
+	// right at the time of the first request, vs. on the first retry as
+	// is done on the server side inside forward(). This is because the
+	// servers may already be applying the RPCHoldTimeout up there, so by
+	// starting the timer here we won't potentially double up the delay.
+	firstCheck := time.Now()
+
+TRY:
+	server := c.servers.FindServer()
+	if server == nil {
 		return noServersErr
 	}
 
-	var mErr multierror.Error
-	for _, s := range servers {
-		// Make the RPC request
-		if err := c.connPool.RPC(c.Region(), s.addr, c.RPCMajorVersion(), method, args, reply); err != nil {
-			errmsg := fmt.Errorf("RPC failed to server %s: %v", s.addr, err)
-			mErr.Errors = append(mErr.Errors, errmsg)
-			c.logger.Printf("[DEBUG] client: %v", errmsg)
-			c.servers.failed(s)
-			continue
-		}
-		c.servers.good(s)
+	// Make the request.
+	rpcErr := c.connPool.RPC(c.Region(), server.Addr, c.RPCMajorVersion(), method, args, reply)
+	if rpcErr == nil {
 		return nil
 	}
 
-	return mErr.ErrorOrNil()
+	// Move off to another server, and see if we can retry.
+	c.logger.Printf("[ERR] nomad: %q RPC failed to server %s: %v", method, server.Addr, rpcErr)
+	c.servers.NotifyFailedServer(server)
+	if retry := canRetry(args, rpcErr); !retry {
+		return rpcErr
+	}
+
+	// We can wait a bit and retry!
+	// TODO(alexdadgar): Plumb through the RPCHoldTimeout config
+	//if time.Since(firstCheck) < c.config.RPCHoldTimeout {
+	if time.Since(firstCheck) < 5*time.Second {
+		jitter := lib.RandomStagger(5 * time.Second / nomad.JitterFraction)
+		select {
+		case <-time.After(jitter):
+			goto TRY
+		case <-c.shutdownCh:
+		}
+	}
+	return rpcErr
+}
+
+// canRetry returns true if the given situation is safe for a retry.
+func canRetry(args interface{}, err error) bool {
+	// No leader errors are always safe to retry since no state could have
+	// been changed.
+	if structs.IsErrNoLeader(err) {
+		return true
+	}
+
+	// Reads are safe to retry for stream errors, such as if a server was
+	// being shut down.
+	info, ok := args.(structs.RPCInfo)
+	if ok && info.IsRead() && lib.IsErrEOF(err) {
+		return true
+	}
+
+	return false
 }
 
 // Stats is used to return statistics for debugging and insight
@@ -483,7 +523,7 @@ func (c *Client) Stats() map[string]map[string]string {
 	stats := map[string]map[string]string{
 		"client": {
 			"node_id":         c.NodeID(),
-			"known_servers":   c.servers.all().String(),
+			"known_servers":   strings.Join(c.GetServers(), ","),
 			"num_allocations": strconv.Itoa(c.NumAllocs()),
 			"last_heartbeat":  fmt.Sprintf("%v", time.Since(c.lastHeartbeat)),
 			"heartbeat_ttl":   fmt.Sprintf("%v", c.heartbeatTTL),
@@ -568,20 +608,21 @@ func (c *Client) GetClientAlloc(allocID string) (*structs.Allocation, error) {
 
 // GetServers returns the list of nomad servers this client is aware of.
 func (c *Client) GetServers() []string {
-	endpoints := c.servers.all()
+	endpoints := c.servers.GetServers()
 	res := make([]string, len(endpoints))
 	for i := range endpoints {
-		res[i] = endpoints[i].addr.String()
+		res[i] = endpoints[i].String()
 	}
+	sort.Strings(res)
 	return res
 }
 
 // SetServers sets a new list of nomad servers to connect to. As long as one
 // server is resolvable no error is returned.
-func (c *Client) SetServers(servers []string) error {
-	endpoints := make([]*endpoint, 0, len(servers))
+func (c *Client) SetServers(in []string) error {
+	endpoints := make([]*servers.Server, 0, len(in))
 	var merr multierror.Error
-	for _, s := range servers {
+	for _, s := range in {
 		addr, err := resolveServer(s)
 		if err != nil {
 			c.logger.Printf("[DEBUG] client: ignoring server %s due to resolution error: %v", s, err)
@@ -589,9 +630,7 @@ func (c *Client) SetServers(servers []string) error {
 			continue
 		}
 
-		// Valid endpoint, append it without a priority as this API
-		// doesn't support different priorities for different servers
-		endpoints = append(endpoints, &endpoint{name: s, addr: addr})
+		endpoints = append(endpoints, &servers.Server{Addr: addr})
 	}
 
 	// Only return errors if no servers are valid
@@ -602,7 +641,7 @@ func (c *Client) SetServers(servers []string) error {
 		return noServersErr
 	}
 
-	c.servers.set(endpoints)
+	c.servers.SetServers(endpoints)
 	return nil
 }
 
@@ -1248,26 +1287,25 @@ func (c *Client) updateNodeStatus() error {
 		}
 	}
 
-	// Convert []*NodeServerInfo to []*endpoints
-	localdc := c.Datacenter()
-	servers := make(endpoints, 0, len(resp.Servers))
+	// Update the number of nodes in the cluster so we can adjust our server
+	// rebalance rate.
+	c.servers.SetNumNodes(resp.NumNodes)
+
+	// Convert []*NodeServerInfo to []*servers.Server
+	nomadServers := make([]*servers.Server, 0, len(resp.Servers))
 	for _, s := range resp.Servers {
 		addr, err := resolveServer(s.RPCAdvertiseAddr)
 		if err != nil {
 			c.logger.Printf("[WARN] client: ignoring invalid server %q: %v", s.RPCAdvertiseAddr, err)
 			continue
 		}
-		e := endpoint{name: s.RPCAdvertiseAddr, addr: addr}
-		if s.Datacenter != localdc {
-			// server is non-local; de-prioritize
-			e.priority = 1
-		}
-		servers = append(servers, &e)
+		e := &servers.Server{DC: s.Datacenter, Addr: addr}
+		nomadServers = append(nomadServers, e)
 	}
-	if len(servers) == 0 {
+	if len(nomadServers) == 0 {
 		return fmt.Errorf("server returned no valid servers")
 	}
-	c.servers.set(servers)
+	c.servers.SetServers(nomadServers)
 
 	// Begin polling Consul if there is no Nomad leader.  We could be
 	// heartbeating to a Nomad server that is in the minority of a
@@ -1860,7 +1898,7 @@ func (c *Client) consulDiscoveryImpl() error {
 
 	serviceName := c.configCopy.ConsulConfig.ServerServiceName
 	var mErr multierror.Error
-	var servers endpoints
+	var nomadServers servers.Servers
 	c.logger.Printf("[DEBUG] client.consul: bootstrap contacting following Consul DCs: %+q", dcs)
 DISCOLOOP:
 	for _, dc := range dcs {
@@ -1900,22 +1938,23 @@ DISCOLOOP:
 				if err != nil {
 					mErr.Errors = append(mErr.Errors, err)
 				}
-				servers = append(servers, &endpoint{name: p, addr: addr})
+				srv := &servers.Server{Addr: addr}
+				nomadServers = append(nomadServers, srv)
 			}
-			if len(servers) > 0 {
+			if len(nomadServers) > 0 {
 				break DISCOLOOP
 			}
 		}
 	}
-	if len(servers) == 0 {
+	if len(nomadServers) == 0 {
 		if len(mErr.Errors) > 0 {
 			return mErr.ErrorOrNil()
 		}
 		return fmt.Errorf("no Nomad Servers advertising service %q in Consul datacenters: %+q", serviceName, dcs)
 	}
 
-	c.logger.Printf("[INFO] client.consul: discovered following Servers: %s", servers)
-	c.servers.set(servers)
+	c.logger.Printf("[INFO] client.consul: discovered following Servers: %s", nomadServers)
+	c.servers.SetServers(nomadServers)
 
 	// Notify waiting rpc calls. If a goroutine just failed an RPC call and
 	// isn't receiving on this chan yet they'll still retry eventually.
@@ -2242,4 +2281,12 @@ func resolveServer(s string) (net.Addr, error) {
 		}
 	}
 	return net.ResolveTCPAddr("tcp", net.JoinHostPort(host, port))
+}
+
+// Ping is used to ping a particular server and returns whether it is healthy or
+// a potential error.
+func (c *Client) Ping(srv net.Addr) (bool, error) {
+	var reply struct{}
+	err := c.connPool.RPC(c.Region(), srv, c.RPCMajorVersion(), "Status.Ping", struct{}{}, &reply)
+	return err == nil, err
 }
