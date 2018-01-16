@@ -57,20 +57,17 @@ func TestRktDriver_Fingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: make(map[string]string),
 	}
-	apply, err := d.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := d.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !apply {
-		t.Fatalf("should apply")
-	}
-	if node.Attributes["driver.rkt"] != "1" {
+	if nodeAttributesDiff["driver.rkt"] != "1" {
 		t.Fatalf("Missing Rkt driver")
 	}
-	if node.Attributes["driver.rkt.version"] == "" {
+	if nodeAttributesDiff["driver.rkt.version"] == "" {
 		t.Fatalf("Missing Rkt driver version")
 	}
-	if node.Attributes["driver.rkt.appc.version"] == "" {
+	if nodeAttributesDiff["driver.rkt.appc.version"] == "" {
 		t.Fatalf("Missing appc version for the Rkt driver")
 	}
 }

@@ -21,17 +21,17 @@ func TestNomadFingerprint(t *testing.T) {
 			Version:  v,
 		},
 	}
-	ok, err := f.Fingerprint(c, node)
+	nodeAttributesDiff, err := f.Fingerprint(c, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
+	if len(nodeAttributesDiff) == 0 {
 		t.Fatalf("should apply")
 	}
-	if node.Attributes["nomad.version"] != v {
+	if nodeAttributesDiff["nomad.version"] != v {
 		t.Fatalf("incorrect version")
 	}
-	if node.Attributes["nomad.revision"] != r {
+	if nodeAttributesDiff["nomad.revision"] != r {
 		t.Fatalf("incorrect revision")
 	}
 }

@@ -112,15 +112,17 @@ func (d *JavaDriver) Abilities() DriverAbilities {
 	}
 }
 
-func (d *JavaDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (d *JavaDriver) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	// Only enable if we are root and cgroups are mounted when running on linux systems.
 	if runtime.GOOS == "linux" && (syscall.Geteuid() != 0 || !cgroupsMounted(node)) {
 		if d.fingerprintSuccess == nil || *d.fingerprintSuccess {
 			d.logger.Printf("[DEBUG] driver.java: root privileges and mounted cgroups required on linux, disabling")
 		}
-		delete(node.Attributes, "driver.java")
+		nodeAttributes[javaDriverAttr] = ""
 		d.fingerprintSuccess = helper.BoolToPtr(false)
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	// Find java version
@@ -132,9 +134,9 @@ func (d *JavaDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, 
 	err := cmd.Run()
 	if err != nil {
 		// assume Java wasn't found
-		delete(node.Attributes, javaDriverAttr)
+		nodeAttributes[javaDriverAttr] = ""
 		d.fingerprintSuccess = helper.BoolToPtr(false)
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	// 'java -version' returns output on Stderr typically.
@@ -152,9 +154,9 @@ func (d *JavaDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, 
 		if d.fingerprintSuccess == nil || *d.fingerprintSuccess {
 			d.logger.Println("[WARN] driver.java: error parsing Java version information, aborting")
 		}
-		delete(node.Attributes, javaDriverAttr)
+		nodeAttributes[javaDriverAttr] = ""
 		d.fingerprintSuccess = helper.BoolToPtr(false)
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	// Assume 'java -version' returns 3 lines:
@@ -166,13 +168,13 @@ func (d *JavaDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, 
 	versionString := info[0]
 	versionString = strings.TrimPrefix(versionString, "java version ")
 	versionString = strings.Trim(versionString, "\"")
-	node.Attributes[javaDriverAttr] = "1"
-	node.Attributes["driver.java.version"] = versionString
-	node.Attributes["driver.java.runtime"] = info[1]
-	node.Attributes["driver.java.vm"] = info[2]
+	nodeAttributes[javaDriverAttr] = "1"
+	nodeAttributes["driver.java.version"] = versionString
+	nodeAttributes["driver.java.runtime"] = info[1]
+	nodeAttributes["driver.java.vm"] = info[2]
 	d.fingerprintSuccess = helper.BoolToPtr(true)
 
-	return true, nil
+	return nodeAttributes, nil
 }
 
 func (d *JavaDriver) Prestart(*ExecContext, *structs.Task) (*PrestartResponse, error) {

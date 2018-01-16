@@ -24,12 +24,13 @@ func NewStorageFingerprint(logger *log.Logger) Fingerprint {
 	return fp
 }
 
-func (f *StorageFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (f *StorageFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
 
 	// Initialize these to empty defaults
-	node.Attributes["unique.storage.volume"] = ""
-	node.Attributes["unique.storage.bytestotal"] = ""
-	node.Attributes["unique.storage.bytesfree"] = ""
+	nodeAttributes["unique.storage.volume"] = ""
+	nodeAttributes["unique.storage.bytestotal"] = ""
+	nodeAttributes["unique.storage.bytesfree"] = ""
 	if node.Resources == nil {
 		node.Resources = &structs.Resources{}
 	}
@@ -40,20 +41,20 @@ func (f *StorageFingerprint) Fingerprint(cfg *config.Config, node *structs.Node)
 		var err error
 		storageDir, err = os.Getwd()
 		if err != nil {
-			return false, fmt.Errorf("unable to get CWD from filesystem: %s", err)
+			return nodeAttributes, fmt.Errorf("unable to get CWD from filesystem: %s", err)
 		}
 	}
 
 	volume, total, free, err := f.diskFree(storageDir)
 	if err != nil {
-		return false, fmt.Errorf("failed to determine disk space for %s: %v", storageDir, err)
+		return nodeAttributes, fmt.Errorf("failed to determine disk space for %s: %v", storageDir, err)
 	}
 
-	node.Attributes["unique.storage.volume"] = volume
-	node.Attributes["unique.storage.bytestotal"] = strconv.FormatUint(total, 10)
-	node.Attributes["unique.storage.bytesfree"] = strconv.FormatUint(free, 10)
+	nodeAttributes["unique.storage.volume"] = volume
+	nodeAttributes["unique.storage.bytestotal"] = strconv.FormatUint(total, 10)
+	nodeAttributes["unique.storage.bytesfree"] = strconv.FormatUint(free, 10)
 
 	node.Resources.DiskMB = int(free / bytesPerMegabyte)
 
-	return true, nil
+	return nodeAttributes, nil
 }

@@ -37,14 +37,11 @@ func TestExecDriver_Fingerprint(t *testing.T) {
 			"unique.cgroup.mountpoint": "/sys/fs/cgroup",
 		},
 	}
-	apply, err := d.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := d.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !apply {
-		t.Fatalf("should apply")
-	}
-	if node.Attributes["driver.exec"] == "" {
+	if nodeAttributesDiff["driver.exec"] == "" {
 		t.Fatalf("missing driver")
 	}
 }

@@ -12,15 +12,15 @@ func TestMemoryFingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: make(map[string]string),
 	}
-	ok, err := f.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := f.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
-		t.Fatalf("should apply")
+	if len(nodeAttributesDiff) == 0 {
+		t.Fatalf("should generate diff of node attributes")
 	}
 
-	assertNodeAttributeContains(t, node, "memory.totalbytes")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "memory.totalbytes")
 
 	if node.Resources == nil {
 		t.Fatalf("Node Resources was nil")

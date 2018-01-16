@@ -34,17 +34,14 @@ func TestQemuDriver_Fingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: make(map[string]string),
 	}
-	apply, err := d.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := d.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !apply {
-		t.Fatalf("should apply")
-	}
-	if node.Attributes[qemuDriverAttr] == "" {
+	if nodeAttributesDiff[qemuDriverAttr] == "" {
 		t.Fatalf("Missing Qemu driver")
 	}
-	if node.Attributes[qemuDriverVersionAttr] == "" {
+	if nodeAttributesDiff[qemuDriverVersionAttr] == "" {
 		t.Fatalf("Missing Qemu driver version")
 	}
 }
@@ -164,12 +161,13 @@ func TestQemuDriver_GracefulShutdown(t *testing.T) {
 	defer ctx.AllocDir.Destroy()
 	d := NewQemuDriver(ctx.DriverCtx)
 
-	apply, err := d.Fingerprint(&config.Config{}, ctx.DriverCtx.node)
+	nodeAttributesDiff, err := d.Fingerprint(&config.Config{}, ctx.DriverCtx.node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !apply {
-		t.Fatalf("should apply")
+
+	for name, value := range nodeAttributesDiff {
+		ctx.DriverCtx.node.Attributes[name] = value
 	}
 
 	dst := ctx.ExecCtx.TaskDir.Dir

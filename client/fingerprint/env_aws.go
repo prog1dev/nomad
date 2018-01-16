@@ -63,14 +63,15 @@ func NewEnvAWSFingerprint(logger *log.Logger) Fingerprint {
 	return f
 }
 
-func (f *EnvAWSFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (f *EnvAWSFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
 	// Check if we should tighten the timeout
 	if cfg.ReadBoolDefault(TightenNetworkTimeoutsConfig, false) {
 		f.timeout = 1 * time.Millisecond
 	}
 
 	if !f.isAWS() {
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	// newNetwork is populated and addded to the Nodes resources
@@ -115,10 +116,10 @@ func (f *EnvAWSFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 			// if it's a URL error, assume we're not in an AWS environment
 			// TODO: better way to detect AWS? Check xen virtualization?
 			if _, ok := err.(*url.Error); ok {
-				return false, nil
+				return nodeAttributes, nil
 			}
 			// not sure what other errors it would return
-			return false, err
+			return nodeAttributes, err
 		}
 		resp, err := ioutil.ReadAll(res.Body)
 		res.Body.Close()
@@ -132,12 +133,12 @@ func (f *EnvAWSFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 			key = structs.UniqueNamespace(key)
 		}
 
-		node.Attributes[key] = strings.Trim(string(resp), "\n")
+		nodeAttributes[key] = strings.Trim(string(resp), "\n")
 	}
 
 	// copy over network specific information
-	if val := node.Attributes["unique.platform.aws.local-ipv4"]; val != "" {
-		node.Attributes["unique.network.ip-address"] = val
+	if val := nodeAttributes["unique.platform.aws.local-ipv4"]; val != "" {
+		nodeAttributes["unique.network.ip-address"] = val
 		newNetwork.IP = val
 		newNetwork.CIDR = newNetwork.IP + "/32"
 	}
@@ -174,10 +175,10 @@ func (f *EnvAWSFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 
 	// populate Links
 	node.Links["aws.ec2"] = fmt.Sprintf("%s.%s",
-		node.Attributes["platform.aws.placement.availability-zone"],
-		node.Attributes["unique.platform.aws.instance-id"])
+		nodeAttributes["platform.aws.placement.availability-zone"],
+		nodeAttributes["unique.platform.aws.instance-id"])
 
-	return true, nil
+	return nodeAttributes, nil
 }
 
 func (f *EnvAWSFingerprint) isAWS() bool {

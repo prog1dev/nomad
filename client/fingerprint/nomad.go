@@ -19,8 +19,9 @@ func NewNomadFingerprint(logger *log.Logger) Fingerprint {
 	return f
 }
 
-func (f *NomadFingerprint) Fingerprint(config *client.Config, node *structs.Node) (bool, error) {
-	node.Attributes["nomad.version"] = config.Version.VersionNumber()
-	node.Attributes["nomad.revision"] = config.Version.Revision
-	return true, nil
+func (f *NomadFingerprint) Fingerprint(config *client.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+	nodeAttributes["nomad.version"] = config.Version.VersionNumber()
+	nodeAttributes["nomad.revision"] = config.Version.Revision
+	return nodeAttributes, nil
 }

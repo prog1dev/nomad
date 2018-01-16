@@ -92,8 +92,8 @@ type Factory func(*log.Logger) Fingerprint
 // many of them can be applied on a particular host.
 type Fingerprint interface {
 	// Fingerprint is used to update properties of the Node,
-	// and returns if the fingerprint was applicable and a potential error.
-	Fingerprint(*config.Config, *structs.Node) (bool, error)
+	// and returns a diff of updated node attributes and a potential error.
+	Fingerprint(*config.Config, *structs.Node) (map[string]string, error)
 
 	// Periodic is a mechanism for the fingerprinter to indicate that it should
 	// be run periodically. The return value is a boolean indicating if it

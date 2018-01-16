@@ -12,26 +12,23 @@ func TestCPUFingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: make(map[string]string),
 	}
-	ok, err := f.Fingerprint(&config.Config{}, node)
+	nodeAttributes, err := f.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
-		t.Fatalf("should apply")
-	}
 
 	// CPU info
-	if node.Attributes["cpu.numcores"] == "" {
+	if nodeAttributes["cpu.numcores"] == "" {
 		t.Fatalf("Missing Num Cores")
 	}
-	if node.Attributes["cpu.modelname"] == "" {
+	if nodeAttributes["cpu.modelname"] == "" {
 		t.Fatalf("Missing Model Name")
 	}
 
-	if node.Attributes["cpu.frequency"] == "" {
+	if nodeAttributes["cpu.frequency"] == "" {
 		t.Fatalf("Missing CPU Frequency")
 	}
-	if node.Attributes["cpu.totalcompute"] == "" {
+	if nodeAttributes["cpu.totalcompute"] == "" {
 		t.Fatalf("Missing CPU Total Compute")
 	}
 
@@ -49,12 +46,15 @@ func TestCPUFingerprint_OverrideCompute(t *testing.T) {
 		Attributes: make(map[string]string),
 	}
 	cfg := &config.Config{}
-	ok, err := f.Fingerprint(cfg, node)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("should apply")
+
+	{
+		_, err := f.Fingerprint(cfg, node)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if node.Resources.CPU == 0 {
+			t.Fatalf("expected fingerprint of cpu of but found 0")
+		}
 	}
 
 	// Get actual system CPU
@@ -63,16 +63,15 @@ func TestCPUFingerprint_OverrideCompute(t *testing.T) {
 	// Override it with a setting
 	cfg.CpuCompute = origCPU + 123
 
-	// Make sure the Fingerprinter applies the override
-	ok, err = f.Fingerprint(cfg, node)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("should apply")
-	}
+	{
+		// Make sure the Fingerprinter applies the override to the node resources
+		_, err := f.Fingerprint(cfg, node)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
 
-	if node.Resources.CPU != cfg.CpuCompute {
-		t.Fatalf("expected override cpu of %d but found %d", cfg.CpuCompute, node.Resources.CPU)
+		if node.Resources.CPU != cfg.CpuCompute {
+			t.Fatalf("expected override cpu of %d but found %d", cfg.CpuCompute, node.Resources.CPU)
+		}
 	}
 }

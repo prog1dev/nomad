@@ -131,14 +131,16 @@ func checkError(err error, logger *log.Logger, desc string) error {
 	return err
 }
 
-func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	// Check if we should tighten the timeout
 	if cfg.ReadBoolDefault(TightenNetworkTimeoutsConfig, false) {
 		f.client.Timeout = 1 * time.Millisecond
 	}
 
 	if !f.isGCE() {
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	if node.Links == nil {
@@ -159,7 +161,7 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 	for k, unique := range keys {
 		value, err := f.Get(k, false)
 		if err != nil {
-			return false, checkError(err, f.logger, k)
+			return nodeAttributes, checkError(err, f.logger, k)
 		}
 
 		// assume we want blank entries
@@ -167,7 +169,7 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 		if unique {
 			key = structs.UniqueNamespace(key)
 		}
-		node.Attributes[key] = strings.Trim(value, "\n")
+		nodeAttributes[key] = strings.Trim(value, "\n")
 	}
 
 	// These keys need everything before the final slash removed to be usable.
@@ -178,14 +180,14 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 	for k, unique := range keys {
 		value, err := f.Get(k, false)
 		if err != nil {
-			return false, checkError(err, f.logger, k)
+			return nodeAttributes, checkError(err, f.logger, k)
 		}
 
 		key := "platform.gce." + k
 		if unique {
 			key = structs.UniqueNamespace(key)
 		}
-		node.Attributes[key] = strings.Trim(lastToken(value), "\n")
+		nodeAttributes[key] = strings.Trim(lastToken(value), "\n")
 	}
 
 	// Get internal and external IPs (if they exist)
@@ -202,10 +204,10 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 		for _, intf := range interfaces {
 			prefix := "platform.gce.network." + lastToken(intf.Network)
 			uniquePrefix := "unique." + prefix
-			node.Attributes[prefix] = "true"
-			node.Attributes[uniquePrefix+".ip"] = strings.Trim(intf.Ip, "\n")
+			nodeAttributes[prefix] = "true"
+			nodeAttributes[uniquePrefix+".ip"] = strings.Trim(intf.Ip, "\n")
 			for index, accessConfig := range intf.AccessConfigs {
-				node.Attributes[uniquePrefix+".external-ip."+strconv.Itoa(index)] = accessConfig.ExternalIp
+				nodeAttributes[uniquePrefix+".external-ip."+strconv.Itoa(index)] = accessConfig.ExternalIp
 			}
 		}
 	}
@@ -213,7 +215,7 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 	var tagList []string
 	value, err = f.Get("tags", false)
 	if err != nil {
-		return false, checkError(err, f.logger, "tags")
+		return nodeAttributes, checkError(err, f.logger, "tags")
 	}
 	if err := json.Unmarshal([]byte(value), &tagList); err != nil {
 		f.logger.Printf("[WARN] fingerprint.env_gce: Error decoding instance tags: %s", err.Error())
@@ -231,13 +233,13 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 			key = fmt.Sprintf("%s%s", attr, tag)
 		}
 
-		node.Attributes[key] = "true"
+		nodeAttributes[key] = "true"
 	}
 
 	var attrDict map[string]string
 	value, err = f.Get("attributes/", true)
 	if err != nil {
-		return false, checkError(err, f.logger, "attributes/")
+		return nodeAttributes, checkError(err, f.logger, "attributes/")
 	}
 	if err := json.Unmarshal([]byte(value), &attrDict); err != nil {
 		f.logger.Printf("[WARN] fingerprint.env_gce: Error decoding instance attributes: %s", err.Error())
@@ -255,13 +257,13 @@ func (f *EnvGCEFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 			key = fmt.Sprintf("%s%s", attr, k)
 		}
 
-		node.Attributes[key] = strings.Trim(v, "\n")
+		nodeAttributes[key] = strings.Trim(v, "\n")
 	}
 
 	// populate Links
-	node.Links["gce"] = node.Attributes["unique.platform.gce.id"]
+	node.Links["gce"] = nodeAttributes["unique.platform.gce.id"]
 
-	return true, nil
+	return nodeAttributes, nil
 }
 
 func (f *EnvGCEFingerprint) isGCE() bool {

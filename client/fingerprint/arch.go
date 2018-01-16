@@ -20,7 +20,8 @@ func NewArchFingerprint(logger *log.Logger) Fingerprint {
 	return f
 }
 
-func (f *ArchFingerprint) Fingerprint(config *client.Config, node *structs.Node) (bool, error) {
-	node.Attributes["cpu.arch"] = runtime.GOARCH
-	return true, nil
+func (f *ArchFingerprint) Fingerprint(config *client.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+	nodeAttributes["cpu.arch"] = runtime.GOARCH
+	return nodeAttributes, nil
 }

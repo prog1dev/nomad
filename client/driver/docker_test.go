@@ -169,17 +169,17 @@ func TestDockerDriver_Fingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: make(map[string]string),
 	}
-	apply, err := d.Fingerprint(&config.Config{}, node)
+	attributes, err := d.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if apply != testutil.DockerIsConnected(t) {
+	if testutil.DockerIsConnected(t) && attributes["driver.docker"] == "" {
 		t.Fatalf("Fingerprinter should detect when docker is available")
 	}
-	if node.Attributes["driver.docker"] != "1" {
+	if attributes["driver.docker"] != "1" {
 		t.Log("Docker daemon not available. The remainder of the docker tests will be skipped.")
 	}
-	t.Logf("Found docker version %s", node.Attributes["driver.docker.version"])
+	t.Logf("Found docker version %s", attributes["driver.docker.version"])
 }
 
 // TestDockerDriver_Fingerprint_Bridge asserts that if Docker is running we set
@@ -208,18 +208,18 @@ func TestDockerDriver_Fingerprint_Bridge(t *testing.T) {
 	conf := testConfig(t)
 	conf.Node = mock.Node()
 	dd := NewDockerDriver(NewDriverContext("", "", conf, conf.Node, testLogger(), nil))
-	ok, err := dd.Fingerprint(conf, conf.Node)
+	nodeAttributesDiff, err := dd.Fingerprint(conf, conf.Node)
 	if err != nil {
 		t.Fatalf("error fingerprinting docker: %v", err)
 	}
-	if !ok {
+	if nodeAttributesDiff["driver.docker"] == "" {
 		t.Fatalf("expected Docker to be enabled but false was returned")
 	}
 
-	if found := conf.Node.Attributes["driver.docker.bridge_ip"]; found != expectedAddr {
+	if found := nodeAttributesDiff["driver.docker.bridge_ip"]; found != expectedAddr {
 		t.Fatalf("expected bridge ip %q but found: %q", expectedAddr, found)
 	}
-	t.Logf("docker bridge ip: %q", conf.Node.Attributes["driver.docker.bridge_ip"])
+	t.Logf("docker bridge ip: %q", nodeAttributesDiff["driver.docker.bridge_ip"])
 }
 
 func TestDockerDriver_StartOpen_Wait(t *testing.T) {

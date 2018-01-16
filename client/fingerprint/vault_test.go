@@ -20,16 +20,16 @@ func TestVaultFingerprint(t *testing.T) {
 	config := config.DefaultConfig()
 	config.VaultConfig = tv.Config
 
-	ok, err := fp.Fingerprint(config, node)
+	nodeAttributesDiff, err := fp.Fingerprint(config, node)
 	if err != nil {
 		t.Fatalf("Failed to fingerprint: %s", err)
 	}
-	if !ok {
+	if len(nodeAttributesDiff) == 0 {
 		t.Fatalf("Failed to apply node attributes")
 	}
 
-	assertNodeAttributeContains(t, node, "vault.accessible")
-	assertNodeAttributeContains(t, node, "vault.version")
-	assertNodeAttributeContains(t, node, "vault.cluster_id")
-	assertNodeAttributeContains(t, node, "vault.cluster_name")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "vault.accessible")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "vault.version")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "vault.cluster_id")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "vault.cluster_name")
 }

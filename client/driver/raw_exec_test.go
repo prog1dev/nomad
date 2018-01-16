@@ -34,27 +34,21 @@ func TestRawExecDriver_Fingerprint(t *testing.T) {
 	// Disable raw exec.
 	cfg := &config.Config{Options: map[string]string{rawExecConfigOption: "false"}}
 
-	apply, err := d.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := d.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if apply {
-		t.Fatalf("should not apply")
-	}
-	if node.Attributes["driver.raw_exec"] != "" {
+	if nodeAttributesDiff["driver.raw_exec"] != "" {
 		t.Fatalf("driver incorrectly enabled")
 	}
 
 	// Enable raw exec.
 	cfg.Options[rawExecConfigOption] = "true"
-	apply, err = d.Fingerprint(cfg, node)
+	nodeAttributesDiff, err = d.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !apply {
-		t.Fatalf("should apply")
-	}
-	if node.Attributes["driver.raw_exec"] != "1" {
+	if nodeAttributesDiff["driver.raw_exec"] != "1" {
 		t.Fatalf("driver not enabled")
 	}
 }

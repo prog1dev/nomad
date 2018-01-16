@@ -49,14 +49,11 @@ func TestJavaDriver_Fingerprint(t *testing.T) {
 			"unique.cgroup.mountpoint": "/sys/fs/cgroups",
 		},
 	}
-	apply, err := d.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := d.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if apply != javaLocated() {
-		t.Fatalf("Fingerprinter should detect Java when it is installed")
-	}
-	if node.Attributes["driver.java"] != "1" {
+	if nodeAttributesDiff["driver.java"] != "1" && javaLocated() {
 		if v, ok := osJavaDriverSupport[runtime.GOOS]; v && ok {
 			t.Fatalf("missing java driver")
 		} else {
@@ -64,7 +61,7 @@ func TestJavaDriver_Fingerprint(t *testing.T) {
 		}
 	}
 	for _, key := range []string{"driver.java.version", "driver.java.runtime", "driver.java.vm"} {
-		if node.Attributes[key] == "" {
+		if nodeAttributesDiff[key] == "" {
 			t.Fatalf("missing driver key (%s)", key)
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs"
 )
 
-func (d *ExecDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (d *ExecDriver) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
 	d.fingerprintSuccess = helper.BoolToPtr(false)
-	return false, nil
+	return make(map[string]string, 0), nil
 }

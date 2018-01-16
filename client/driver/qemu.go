@@ -155,7 +155,9 @@ func (d *QemuDriver) FSIsolation() cstructs.FSIsolation {
 	return cstructs.FSIsolationImage
 }
 
-func (d *QemuDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (d *QemuDriver) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	bin := "qemu-system-x86_64"
 	if runtime.GOOS == "windows" {
 		// On windows, the "qemu-system-x86_64" command does not respond to the
@@ -164,22 +166,20 @@ func (d *QemuDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, 
 	}
 	outBytes, err := exec.Command(bin, "--version").Output()
 	if err != nil {
-		delete(node.Attributes, qemuDriverAttr)
-		return false, nil
+		return nodeAttributes, nil
 	}
 	out := strings.TrimSpace(string(outBytes))
 
 	matches := reQemuVersion.FindStringSubmatch(out)
 	if len(matches) != 2 {
-		delete(node.Attributes, qemuDriverAttr)
-		return false, fmt.Errorf("Unable to parse Qemu version string: %#v", matches)
+		return nodeAttributes, fmt.Errorf("Unable to parse Qemu version string: %#v", matches)
 	}
 	currentQemuVersion := matches[1]
 
-	node.Attributes[qemuDriverAttr] = "1"
-	node.Attributes[qemuDriverVersionAttr] = currentQemuVersion
+	nodeAttributes[qemuDriverAttr] = "1"
+	nodeAttributes[qemuDriverVersionAttr] = currentQemuVersion
 
-	return true, nil
+	return nodeAttributes, nil
 }
 
 func (d *QemuDriver) Prestart(_ *ExecContext, task *structs.Task) (*PrestartResponse, error) {

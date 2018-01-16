@@ -21,7 +21,9 @@ func NewCPUFingerprint(logger *log.Logger) Fingerprint {
 	return f
 }
 
-func (f *CPUFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (f *CPUFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	setResources := func(totalCompute int) {
 		if node.Resources == nil {
 			node.Resources = &structs.Resources{}
@@ -36,20 +38,20 @@ func (f *CPUFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bo
 
 	if cfg.CpuCompute != 0 {
 		setResources(cfg.CpuCompute)
-		return true, nil
+		return nodeAttributes, nil
 	}
 
 	if modelName := stats.CPUModelName(); modelName != "" {
-		node.Attributes["cpu.modelname"] = modelName
+		nodeAttributes["cpu.modelname"] = modelName
 	}
 
 	if mhz := stats.CPUMHzPerCore(); mhz > 0 {
-		node.Attributes["cpu.frequency"] = fmt.Sprintf("%.0f", mhz)
+		nodeAttributes["cpu.frequency"] = fmt.Sprintf("%.0f", mhz)
 		f.logger.Printf("[DEBUG] fingerprint.cpu: frequency: %.0f MHz", mhz)
 	}
 
 	if numCores := stats.CPUNumCores(); numCores > 0 {
-		node.Attributes["cpu.numcores"] = fmt.Sprintf("%d", numCores)
+		nodeAttributes["cpu.numcores"] = fmt.Sprintf("%d", numCores)
 		f.logger.Printf("[DEBUG] fingerprint.cpu: core count: %d", numCores)
 	}
 
@@ -62,17 +64,17 @@ func (f *CPUFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bo
 	// Return an error if no cpu was detected or explicitly set as this
 	// node would be unable to receive any allocations.
 	if tt == 0 {
-		return false, fmt.Errorf("cannot detect cpu total compute. "+
+		return nodeAttributes, fmt.Errorf("cannot detect cpu total compute. "+
 			"CPU compute must be set manually using the client config option %q",
 			"cpu_total_compute")
 	}
 
-	node.Attributes["cpu.totalcompute"] = fmt.Sprintf("%d", tt)
+	nodeAttributes["cpu.totalcompute"] = fmt.Sprintf("%d", tt)
 
 	if node.Resources == nil {
 		node.Resources = &structs.Resources{}
 	}
 
 	node.Resources.CPU = tt
-	return true, nil
+	return nodeAttributes, nil
 }

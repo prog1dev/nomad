@@ -27,19 +27,16 @@ func TestConsulFingerprint(t *testing.T) {
 	config := config.DefaultConfig()
 	config.ConsulConfig.Addr = strings.TrimPrefix(ts.URL, "http://")
 
-	ok, err := fp.Fingerprint(config, node)
+	nodeAttributesDiff, err := fp.Fingerprint(config, node)
 	if err != nil {
 		t.Fatalf("Failed to fingerprint: %s", err)
 	}
-	if !ok {
-		t.Fatalf("Failed to apply node attributes")
-	}
 
-	assertNodeAttributeContains(t, node, "consul.server")
-	assertNodeAttributeContains(t, node, "consul.version")
-	assertNodeAttributeContains(t, node, "consul.revision")
-	assertNodeAttributeContains(t, node, "unique.consul.name")
-	assertNodeAttributeContains(t, node, "consul.datacenter")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "consul.server")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "consul.version")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "consul.revision")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.consul.name")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "consul.datacenter")
 
 	if _, ok := node.Links["consul"]; !ok {
 		t.Errorf("Expected a link to consul, none found")
@@ -180,9 +177,8 @@ func TestConsulFingerprint_UnexpectedResponse(t *testing.T) {
 	config := config.DefaultConfig()
 	config.ConsulConfig.Addr = strings.TrimPrefix(ts.URL, "http://")
 
-	ok, err := fp.Fingerprint(config, node)
+	nodeAttributes, err := fp.Fingerprint(config, node)
 	assert.Nil(err)
-	assert.True(ok)
 
 	attrs := []string{
 		"consul.server",
@@ -192,7 +188,7 @@ func TestConsulFingerprint_UnexpectedResponse(t *testing.T) {
 		"consul.datacenter",
 	}
 	for _, attr := range attrs {
-		if v, ok := node.Attributes[attr]; ok {
+		if v, ok := nodeAttributes[attr]; ok {
 			t.Errorf("unexpected node attribute %q with vlaue %q", attr, v)
 		}
 	}

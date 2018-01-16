@@ -21,20 +21,22 @@ func NewHostFingerprint(logger *log.Logger) Fingerprint {
 	return f
 }
 
-func (f *HostFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (f *HostFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	hostInfo, err := host.Info()
 	if err != nil {
 		f.logger.Println("[WARN] Error retrieving host information: ", err)
-		return false, err
+		return nodeAttributes, err
 	}
 
-	node.Attributes["os.name"] = hostInfo.Platform
-	node.Attributes["os.version"] = hostInfo.PlatformVersion
+	nodeAttributes["os.name"] = hostInfo.Platform
+	nodeAttributes["os.version"] = hostInfo.PlatformVersion
 
-	node.Attributes["kernel.name"] = runtime.GOOS
-	node.Attributes["kernel.version"] = hostInfo.KernelVersion
+	nodeAttributes["kernel.name"] = runtime.GOOS
+	nodeAttributes["kernel.version"] = hostInfo.KernelVersion
 
-	node.Attributes["unique.hostname"] = hostInfo.Hostname
+	nodeAttributes["unique.hostname"] = hostInfo.Hostname
 
-	return true, nil
+	return nodeAttributes, nil
 }

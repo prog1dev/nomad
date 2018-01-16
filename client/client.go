@@ -902,7 +902,7 @@ func (c *Client) fingerprint() error {
 
 	c.logger.Printf("[DEBUG] client: built-in fingerprints: %v", fingerprint.BuiltinFingerprints())
 
-	var applied []string
+	var appliedAttributes []string
 	var skipped []string
 	for _, name := range fingerprint.BuiltinFingerprints() {
 		// Skip modules that are not in the whitelist if it is enabled.
@@ -920,15 +920,26 @@ func (c *Client) fingerprint() error {
 			return err
 		}
 
-		c.configLock.Lock()
-		applies, err := f.Fingerprint(c.config, c.config.Node)
-		c.configLock.Unlock()
+		nodeAttributes, err := f.Fingerprint(c.config, c.config.Node)
 		if err != nil {
 			return err
 		}
-		if applies {
-			applied = append(applied, name)
+
+		// if an attribute should be skipped, remove it from the list which we will
+		// later apply to the node
+		for _, e := range skipped {
+			delete(nodeAttributes, e)
 		}
+
+		// add the diff of attributes found from each fingerprinter, and also apply
+		// them to a list of appliedAttributes which we will log later
+		c.configLock.Lock()
+		for attrName, value := range nodeAttributes {
+			c.config.Node.Attributes[attrName] = value
+			appliedAttributes = append(appliedAttributes, attrName)
+		}
+		c.configLock.Unlock()
+
 		p, period := f.Periodic()
 		if p {
 			// TODO: If more periodic fingerprinters are added, then
@@ -937,7 +948,8 @@ func (c *Client) fingerprint() error {
 			go c.fingerprintPeriodic(name, f, period)
 		}
 	}
-	c.logger.Printf("[DEBUG] client: applied fingerprints %v", applied)
+
+	c.logger.Printf("[DEBUG] client: applied fingerprints %v", appliedAttributes)
 	if len(skipped) != 0 {
 		c.logger.Printf("[DEBUG] client: fingerprint modules skipped due to white/blacklist: %v", skipped)
 	}
@@ -950,9 +962,16 @@ func (c *Client) fingerprintPeriodic(name string, f fingerprint.Fingerprint, d t
 	for {
 		select {
 		case <-time.After(d):
-			c.configLock.Lock()
-			if _, err := f.Fingerprint(c.config, c.config.Node); err != nil {
+			nodeAttributes, err := f.Fingerprint(c.config, c.config.Node)
+			if err != nil {
 				c.logger.Printf("[DEBUG] client: periodic fingerprinting for %v failed: %v", name, err)
+				return
+			}
+
+			// apply the node attributes diff to the node itself
+			c.configLock.Lock()
+			for key, val := range nodeAttributes {
+				c.config.Node.Attributes[key] = val
 			}
 			c.configLock.Unlock()
 		case <-c.shutdownCh:
@@ -988,15 +1007,19 @@ func (c *Client) setupDrivers() error {
 		if err != nil {
 			return err
 		}
-		c.configLock.Lock()
-		applies, err := d.Fingerprint(c.config, c.config.Node)
-		c.configLock.Unlock()
+		nodeAttributesDiff, err := d.Fingerprint(c.config, c.config.Node)
 		if err != nil {
 			return err
 		}
-		if applies {
+
+		// update with the result of fingerprinting the node and the diff that was
+		// created
+		c.configLock.Lock()
+		for name, val := range nodeAttributesDiff {
 			avail = append(avail, name)
+			c.config.Node.Attributes[name] = val
 		}
+		c.configLock.Unlock()
 
 		p, period := d.Periodic()
 		if p {

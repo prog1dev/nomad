@@ -49,14 +49,12 @@ func TestCGroupFingerprint(t *testing.T) {
 		Attributes: make(map[string]string),
 	}
 
-	ok, err := f.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := f.Fingerprint(&config.Config{}, node)
 	if err == nil {
 		t.Fatalf("expected an error")
 	}
-	if ok {
-		t.Fatalf("should not apply")
-	}
-	if a, ok := node.Attributes["unique.cgroup.mountpoint"]; ok {
+
+	if a, _ := nodeAttributesDiff["unique.cgroup.mountpoint"]; a != "" {
 		t.Fatalf("unexpected attribute found, %s", a)
 	}
 
@@ -70,14 +68,13 @@ func TestCGroupFingerprint(t *testing.T) {
 		Attributes: make(map[string]string),
 	}
 
-	ok, err = f.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err = f.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("unexpected error, %s", err)
 	}
-	if !ok {
-		t.Fatalf("should apply")
+	if a, ok := nodeAttributesDiff["unique.cgroup.mountpoint"]; !ok {
+		t.Fatalf("unable to find attribute: %s", a)
 	}
-	assertNodeAttributeContains(t, node, "unique.cgroup.mountpoint")
 
 	f = &CGroupFingerprint{
 		logger:             testLogger(),
@@ -89,14 +86,11 @@ func TestCGroupFingerprint(t *testing.T) {
 		Attributes: make(map[string]string),
 	}
 
-	ok, err = f.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err = f.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("unexpected error, %s", err)
 	}
-	if !ok {
-		t.Fatalf("should apply")
-	}
-	if a, ok := node.Attributes["unique.cgroup.mountpoint"]; ok {
+	if a, _ := nodeAttributesDiff["unique.cgroup.mountpoint"]; a != "" {
 		t.Fatalf("unexpected attribute found, %s", a)
 	}
 }

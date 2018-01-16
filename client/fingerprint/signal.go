@@ -21,13 +21,15 @@ func NewSignalFingerprint(logger *log.Logger) Fingerprint {
 	return f
 }
 
-func (f *SignalFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (f *SignalFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	// Build the list of available signals
 	sigs := make([]string, 0, len(signals.SignalLookup))
 	for signal := range signals.SignalLookup {
 		sigs = append(sigs, signal)
 	}
 
-	node.Attributes["os.signals"] = strings.Join(sigs, ",")
-	return true, nil
+	nodeAttributes["os.signals"] = strings.Join(sigs, ",")
+	return nodeAttributes, nil
 }

@@ -189,17 +189,17 @@ func TestNetworkFingerprint_basic(t *testing.T) {
 	}
 	cfg := &config.Config{NetworkSpeed: 101}
 
-	ok, err := f.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := f.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
+	if len(nodeAttributesDiff) == 0 {
 		t.Fatalf("should apply (HINT: working offline? Set env %q=y", skipOnlineTestsEnvVar)
 	}
 
-	assertNodeAttributeContains(t, node, "unique.network.ip-address")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.network.ip-address")
 
-	ip := node.Attributes["unique.network.ip-address"]
+	ip := nodeAttributesDiff["unique.network.ip-address"]
 	match := net.ParseIP(ip)
 	if match == nil {
 		t.Fatalf("Bad IP match: %s", ip)
@@ -232,13 +232,13 @@ func TestNetworkFingerprint_default_device_absent(t *testing.T) {
 	}
 	cfg := &config.Config{NetworkSpeed: 100, NetworkInterface: "eth0"}
 
-	ok, err := f.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := f.Fingerprint(cfg, node)
 	if err == nil {
 		t.Fatalf("err: %v", err)
 	}
 
-	if ok {
-		t.Fatalf("ok: %v", ok)
+	if len(nodeAttributesDiff) != 0 {
+		t.Fatalf("attributes should be zero but instead are: %v", nodeAttributesDiff)
 	}
 }
 
@@ -249,17 +249,17 @@ func TestNetworkFingerPrint_default_device(t *testing.T) {
 	}
 	cfg := &config.Config{NetworkSpeed: 100, NetworkInterface: "lo"}
 
-	ok, err := f.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := f.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
+	if len(nodeAttributesDiff) == 0 {
 		t.Fatalf("should apply")
 	}
 
-	assertNodeAttributeContains(t, node, "unique.network.ip-address")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.network.ip-address")
 
-	ip := node.Attributes["unique.network.ip-address"]
+	ip := nodeAttributesDiff["unique.network.ip-address"]
 	match := net.ParseIP(ip)
 	if match == nil {
 		t.Fatalf("Bad IP match: %s", ip)
@@ -292,17 +292,14 @@ func TestNetworkFingerPrint_LinkLocal_Allowed(t *testing.T) {
 	}
 	cfg := &config.Config{NetworkSpeed: 100, NetworkInterface: "eth3"}
 
-	ok, err := f.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := f.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
-		t.Fatalf("should apply")
-	}
 
-	assertNodeAttributeContains(t, node, "unique.network.ip-address")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.network.ip-address")
 
-	ip := node.Attributes["unique.network.ip-address"]
+	ip := nodeAttributesDiff["unique.network.ip-address"]
 	match := net.ParseIP(ip)
 	if match == nil {
 		t.Fatalf("Bad IP match: %s", ip)
@@ -335,17 +332,17 @@ func TestNetworkFingerPrint_LinkLocal_Allowed_MixedIntf(t *testing.T) {
 	}
 	cfg := &config.Config{NetworkSpeed: 100, NetworkInterface: "eth4"}
 
-	ok, err := f.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := f.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
+	if len(nodeAttributesDiff) == 0 {
 		t.Fatalf("should apply")
 	}
 
-	assertNodeAttributeContains(t, node, "unique.network.ip-address")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.network.ip-address")
 
-	ip := node.Attributes["unique.network.ip-address"]
+	ip := nodeAttributesDiff["unique.network.ip-address"]
 	match := net.ParseIP(ip)
 	if match == nil {
 		t.Fatalf("Bad IP match: %s", ip)
@@ -387,11 +384,11 @@ func TestNetworkFingerPrint_LinkLocal_Disallowed(t *testing.T) {
 		},
 	}
 
-	ok, err := f.Fingerprint(cfg, node)
+	nodeAttributesDiff, err := f.Fingerprint(cfg, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
+	if len(nodeAttributesDiff) != 0 {
 		t.Fatalf("should not apply")
 	}
 }

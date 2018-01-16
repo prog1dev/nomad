@@ -29,7 +29,9 @@ func NewConsulFingerprint(logger *log.Logger) Fingerprint {
 	return &ConsulFingerprint{logger: logger, lastState: consulUnavailable}
 }
 
-func (f *ConsulFingerprint) Fingerprint(config *client.Config, node *structs.Node) (bool, error) {
+func (f *ConsulFingerprint) Fingerprint(config *client.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	// Guard against uninitialized Links
 	if node.Links == nil {
 		node.Links = map[string]string{}
@@ -40,12 +42,12 @@ func (f *ConsulFingerprint) Fingerprint(config *client.Config, node *structs.Nod
 	if f.client == nil {
 		consulConfig, err := config.ConsulConfig.ApiConfig()
 		if err != nil {
-			return false, fmt.Errorf("Failed to initialize the Consul client config: %v", err)
+			return nodeAttributes, fmt.Errorf("Failed to initialize the Consul client config: %v", err)
 		}
 
 		f.client, err = consul.NewClient(consulConfig)
 		if err != nil {
-			return false, fmt.Errorf("Failed to initialize consul client: %s", err)
+			return nodeAttributes, fmt.Errorf("Failed to initialize consul client: %s", err)
 		}
 	}
 
@@ -62,39 +64,39 @@ func (f *ConsulFingerprint) Fingerprint(config *client.Config, node *structs.Nod
 			f.logger.Printf("[INFO] fingerprint.consul: consul agent is unavailable")
 		}
 		f.lastState = consulUnavailable
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	if s, ok := info["Config"]["Server"].(bool); ok {
-		node.Attributes["consul.server"] = strconv.FormatBool(s)
+		nodeAttributes["consul.server"] = strconv.FormatBool(s)
 	} else {
 		f.logger.Printf("[WARN] fingerprint.consul: unable to fingerprint consul.server")
 	}
 	if v, ok := info["Config"]["Version"].(string); ok {
-		node.Attributes["consul.version"] = v
+		nodeAttributes["consul.version"] = v
 	} else {
 		f.logger.Printf("[WARN] fingerprint.consul: unable to fingerprint consul.version")
 	}
 	if r, ok := info["Config"]["Revision"].(string); ok {
-		node.Attributes["consul.revision"] = r
+		nodeAttributes["consul.revision"] = r
 	} else {
 		f.logger.Printf("[WARN] fingerprint.consul: unable to fingerprint consul.revision")
 	}
 	if n, ok := info["Config"]["NodeName"].(string); ok {
-		node.Attributes["unique.consul.name"] = n
+		nodeAttributes["unique.consul.name"] = n
 	} else {
 		f.logger.Printf("[WARN] fingerprint.consul: unable to fingerprint unique.consul.name")
 	}
 	if d, ok := info["Config"]["Datacenter"].(string); ok {
-		node.Attributes["consul.datacenter"] = d
+		nodeAttributes["consul.datacenter"] = d
 	} else {
 		f.logger.Printf("[WARN] fingerprint.consul: unable to fingerprint consul.datacenter")
 	}
 
-	if node.Attributes["consul.datacenter"] != "" || node.Attributes["unique.consul.name"] != "" {
+	if nodeAttributes["consul.datacenter"] != "" || nodeAttributes["unique.consul.name"] != "" {
 		node.Links["consul"] = fmt.Sprintf("%s.%s",
-			node.Attributes["consul.datacenter"],
-			node.Attributes["unique.consul.name"])
+			nodeAttributes["consul.datacenter"],
+			nodeAttributes["unique.consul.name"])
 	} else {
 		f.logger.Printf("[WARN] fingerprint.consul: malformed Consul response prevented linking")
 	}
@@ -105,17 +107,12 @@ func (f *ConsulFingerprint) Fingerprint(config *client.Config, node *structs.Nod
 		f.logger.Printf("[INFO] fingerprint.consul: consul agent is available")
 	}
 	f.lastState = consulAvailable
-	return true, nil
+	return nodeAttributes, nil
 }
 
 // clearConsulAttributes removes consul attributes and links from the passed
 // Node.
 func (f *ConsulFingerprint) clearConsulAttributes(n *structs.Node) {
-	delete(n.Attributes, "consul.server")
-	delete(n.Attributes, "consul.version")
-	delete(n.Attributes, "consul.revision")
-	delete(n.Attributes, "unique.consul.name")
-	delete(n.Attributes, "consul.datacenter")
 	delete(n.Links, "consul")
 }
 

@@ -13,28 +13,28 @@ const (
 	execDriverAttr = "driver.exec"
 )
 
-func (d *ExecDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (d *ExecDriver) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+
 	// Only enable if cgroups are available and we are root
 	if !cgroupsMounted(node) {
 		if d.fingerprintSuccess == nil || *d.fingerprintSuccess {
 			d.logger.Printf("[DEBUG] driver.exec: cgroups unavailable, disabling")
 		}
 		d.fingerprintSuccess = helper.BoolToPtr(false)
-		delete(node.Attributes, execDriverAttr)
-		return false, nil
+		return nodeAttributes, nil
 	} else if unix.Geteuid() != 0 {
 		if d.fingerprintSuccess == nil || *d.fingerprintSuccess {
 			d.logger.Printf("[DEBUG] driver.exec: must run as root user, disabling")
 		}
-		delete(node.Attributes, execDriverAttr)
 		d.fingerprintSuccess = helper.BoolToPtr(false)
-		return false, nil
+		return nodeAttributes, nil
 	}
 
 	if d.fingerprintSuccess == nil || !*d.fingerprintSuccess {
 		d.logger.Printf("[DEBUG] driver.exec: exec driver is enabled")
 	}
-	node.Attributes[execDriverAttr] = "1"
+	nodeAttributes[execDriverAttr] = "1"
 	d.fingerprintSuccess = helper.BoolToPtr(true)
-	return true, nil
+	return nodeAttributes, nil
 }

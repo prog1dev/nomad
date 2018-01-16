@@ -92,18 +92,19 @@ func (d *RawExecDriver) FSIsolation() cstructs.FSIsolation {
 	return cstructs.FSIsolationNone
 }
 
-func (d *RawExecDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
+func (d *RawExecDriver) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
 	// Check that the user has explicitly enabled this executor.
 	enabled := cfg.ReadBoolDefault(rawExecConfigOption, false)
 
 	if enabled || cfg.DevMode {
 		d.logger.Printf("[WARN] driver.raw_exec: raw exec is enabled. Only enable if needed")
-		node.Attributes[rawExecDriverAttr] = "1"
-		return true, nil
+		nodeAttributes[rawExecDriverAttr] = "1"
+		return nodeAttributes, nil
 	}
 
-	delete(node.Attributes, rawExecDriverAttr)
-	return false, nil
+	nodeAttributes[rawExecDriverAttr] = ""
+	return nodeAttributes, nil
 }
 
 func (d *RawExecDriver) Prestart(*ExecContext, *structs.Task) (*PrestartResponse, error) {

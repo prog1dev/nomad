@@ -12,16 +12,17 @@ func TestHostFingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: make(map[string]string),
 	}
-	ok, err := f.Fingerprint(&config.Config{}, node)
+	nodeAttributesDiff, err := f.Fingerprint(&config.Config{}, node)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if !ok {
-		t.Fatalf("should apply")
+
+	if len(nodeAttributesDiff) == 0 {
+		t.Fatalf("should generate a diff of node attributes")
 	}
 
 	// Host info
 	for _, key := range []string{"os.name", "os.version", "unique.hostname", "kernel.name"} {
-		assertNodeAttributeContains(t, node, key)
+		assertNodeAttributeContains(t, nodeAttributesDiff, key)
 	}
 }

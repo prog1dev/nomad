@@ -13,17 +13,17 @@ func TestStorageFingerprint(t *testing.T) {
 		Attributes: make(map[string]string),
 	}
 
-	assertFingerprintOK(t, fp, node)
+	nodeAttributesDiff := assertFingerprintOK(t, fp, node)
 
-	assertNodeAttributeContains(t, node, "unique.storage.volume")
-	assertNodeAttributeContains(t, node, "unique.storage.bytestotal")
-	assertNodeAttributeContains(t, node, "unique.storage.bytesfree")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.storage.volume")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.storage.bytestotal")
+	assertNodeAttributeContains(t, nodeAttributesDiff, "unique.storage.bytesfree")
 
-	total, err := strconv.ParseInt(node.Attributes["unique.storage.bytestotal"], 10, 64)
+	total, err := strconv.ParseInt(nodeAttributesDiff["unique.storage.bytestotal"], 10, 64)
 	if err != nil {
 		t.Fatalf("Failed to parse unique.storage.bytestotal: %s", err)
 	}
-	free, err := strconv.ParseInt(node.Attributes["unique.storage.bytesfree"], 10, 64)
+	free, err := strconv.ParseInt(nodeAttributesDiff["unique.storage.bytesfree"], 10, 64)
 	if err != nil {
 		t.Fatalf("Failed to parse unique.storage.bytesfree: %s", err)
 	}

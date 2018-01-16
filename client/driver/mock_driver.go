@@ -194,9 +194,10 @@ func (m *MockDriver) Validate(map[string]interface{}) error {
 }
 
 // Fingerprint fingerprints a node and returns if MockDriver is enabled
-func (m *MockDriver) Fingerprint(cfg *config.Config, node *structs.Node) (bool, error) {
-	node.Attributes["driver.mock_driver"] = "1"
-	return true, nil
+func (m *MockDriver) Fingerprint(cfg *config.Config, node *structs.Node) (map[string]string, error) {
+	nodeAttributes := make(map[string]string, 0)
+	nodeAttributes["driver.mock_driver"] = "1"
+	return nodeAttributes, nil
 }
 
 // MockDriverHandle is a driver handler which supervises a mock task
