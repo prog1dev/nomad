@@ -38,17 +38,24 @@ func TestLxcDriver_Fingerprint(t *testing.T) {
 	node := &structs.Node{
 		Attributes: map[string]string{},
 	}
-	nodeAttributesDiff, err := d.Fingerprint(&config.Config{}, node)
-	if err != nil {
-		t.Fatalf("err: %v", err)
+
+	// test with an empty config
+	{
+		_, err := d.Fingerprint(&config.Config{}, node)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
 	}
 
-	nodeAttributesDiff, err = d.Fingerprint(&config.Config{Options: map[string]string{lxcConfigOption: "0"}}, node)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if nodeAttributesDiff["driver.lxc"] == "" {
-		t.Fatalf("missing driver")
+	// test when lxc is enable din the config
+	{
+		nodeAttributesDiff, err := d.Fingerprint(&config.Config{Options: map[string]string{lxcConfigOption: "1"}}, node)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if nodeAttributesDiff["driver.lxc"] == "" {
+			t.Fatalf("missing driver")
+		}
 	}
 }
 
